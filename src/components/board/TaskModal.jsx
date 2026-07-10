@@ -35,13 +35,21 @@ const formatBytes = (bytes, decimals = 2) => {
 
 const loadSheetJS = () => {
   return new Promise((resolve, reject) => {
-    if (window.XLSX) {
-      resolve(window.XLSX);
-      return;
-    }
+    if (window.XLSX) { resolve(window.XLSX); return; }
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
     script.onload = () => resolve(window.XLSX);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+};
+
+const loadMammoth = () => {
+  return new Promise((resolve, reject) => {
+    if (window.mammoth) { resolve(window.mammoth); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js";
+    script.onload = () => resolve(window.mammoth);
     script.onerror = reject;
     document.head.appendChild(script);
   });
@@ -56,11 +64,31 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
   const [previewFile, setPreviewFile] = useState(null);
   const [textPreview, setTextPreview] = useState("");
   const [loadingText, setLoadingText] = useState(false);
+  const [sheetHtml, setSheetHtml] = useState("");
+  const [docHtml, setDocHtml] = useState("");
+  const [loadingOffice, setLoadingOffice] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, attachmentId: null, filename: "" });
   const [deletingFile, setDeletingFile] = useState(false);
 
+  const EXCEL_TYPES = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+  ];
+  const WORD_TYPES = [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+  ];
+  const PPTX_TYPES = [
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
+  ];
+
   useEffect(() => {
-    if (previewFile && previewFile.contentType?.startsWith("text/")) {
+    if (!previewFile) return;
+
+    const ct = previewFile.contentType;
+
+    if (ct?.startsWith("text/")) {
       setLoadingText(true);
       setTextPreview("");
       fetch(previewFile.url)
@@ -68,7 +96,52 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
         .then((text) => setTextPreview(text))
         .catch(() => setTextPreview("Failed to load file preview content."))
         .finally(() => setLoadingText(false));
+      return;
     }
+
+    if (EXCEL_TYPES.includes(ct)) {
+      setSheetHtml("");
+      setLoadingOffice(true);
+      (async () => {
+        try {
+          const XLSX = await loadSheetJS();
+          const response = await fetch(previewFile.url);
+          const arrayBuffer = await response.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: "array" });
+          const firstSheet = workbook.SheetNames[0];
+          const html = XLSX.utils.sheet_to_html(workbook.Sheets[firstSheet], {
+            header: "",
+            footer: "",
+          });
+          setSheetHtml(html);
+        } catch {
+          setSheetHtml("<p style='padding:1rem;color:#888'>Failed to render spreadsheet.</p>");
+        } finally {
+          setLoadingOffice(false);
+        }
+      })();
+      return;
+    }
+
+    if (WORD_TYPES.includes(ct)) {
+      setDocHtml("");
+      setLoadingOffice(true);
+      (async () => {
+        try {
+          const mammoth = await loadMammoth();
+          const response = await fetch(previewFile.url);
+          const arrayBuffer = await response.arrayBuffer();
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          setDocHtml(result.value);
+        } catch {
+          setDocHtml("<p style='padding:1rem;color:#888'>Failed to render document.</p>");
+        } finally {
+          setLoadingOffice(false);
+        }
+      })();
+      return;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewFile]);
 
   const handleFileUpload = async (e) => {
@@ -355,35 +428,56 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
               </div>
             )}
 
-            {(previewFile.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-              previewFile.contentType === "application/vnd.ms-excel" ||
-              previewFile.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-              previewFile.contentType === "application/msword" ||
-              previewFile.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-              previewFile.contentType === "application/vnd.ms-powerpoint") && (
-              <div className="bg-surface-2 rounded-2xl overflow-hidden h-[550px] border border-line">
-                {!previewFile.url.includes("localhost") && !previewFile.url.includes("127.0.0.1") ? (
-                  <iframe
-                    src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewFile.url)}`}
-                    className="w-full h-full border-none"
-                    title={previewFile.filename}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                    <File className="h-10 w-10 text-faint mb-2.5" />
-                    <p className="text-sm font-semibold text-ink">Office Document Preview</p>
-                    <p className="text-xs text-muted mt-1 max-w-sm">
-                      Microsoft Office Viewer cannot fetch files from <strong>localhost</strong>. Once deployed to Vercel, this Excel/Word file will preview perfectly!
-                    </p>
-                    <a
-                      href={previewFile.url}
-                      download={previewFile.filename}
-                      className="mt-4 inline-flex select-none items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 ease-[var(--ease-spring)] focus-ring disabled:opacity-50 active:scale-[0.97] h-10 px-5 text-sm gap-2 brand-gradient text-white shadow-[var(--shadow-brand)] hover:brightness-[1.07] hover:shadow-[0_14px_34px_rgba(36,102,70,0.45)]"
-                    >
-                      <Download className="h-4 w-4" /> Download file
-                    </a>
+            {/* Excel — rendered in browser via SheetJS */}
+            {EXCEL_TYPES.includes(previewFile.contentType) && (
+              <div className="border border-line rounded-2xl overflow-hidden">
+                {loadingOffice ? (
+                  <div className="flex items-center justify-center py-20 bg-surface-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-brand" />
+                    <span className="ml-2 text-sm text-muted">Loading spreadsheet…</span>
                   </div>
+                ) : (
+                  <div
+                    className="overflow-auto max-h-[500px] bg-white p-1 text-xs"
+                    style={{ "--tw-prose-td-borders": "#e2e8f0" }}
+                    dangerouslySetInnerHTML={{ __html: sheetHtml }}
+                  />
                 )}
+              </div>
+            )}
+
+            {/* Word — rendered in browser via Mammoth.js */}
+            {WORD_TYPES.includes(previewFile.contentType) && (
+              <div className="border border-line rounded-2xl overflow-hidden">
+                {loadingOffice ? (
+                  <div className="flex items-center justify-center py-20 bg-surface-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-brand" />
+                    <span className="ml-2 text-sm text-muted">Loading document…</span>
+                  </div>
+                ) : (
+                  <div
+                    className="prose prose-sm max-w-none overflow-auto max-h-[500px] bg-white p-5 text-slate-800"
+                    dangerouslySetInnerHTML={{ __html: docHtml }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* PowerPoint — no good client-side renderer, just download */}
+            {PPTX_TYPES.includes(previewFile.contentType) && (
+              <div className="flex flex-col items-center justify-center py-14 text-center rounded-2xl border border-dashed border-line bg-surface-2/40">
+                <File className="h-12 w-12 text-faint mb-3" />
+                <p className="text-sm font-semibold text-ink">PowerPoint Preview</p>
+                <p className="text-xs text-muted mt-1 max-w-sm">
+                  Browser-based PowerPoint preview isn't available. Download the file to open it in PowerPoint or Google Slides.
+                </p>
+                <a
+                  href={previewFile.url}
+                  download={previewFile.filename}
+                  className="mt-5 inline-flex select-none items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 ease-[var(--ease-spring)] focus-ring disabled:opacity-50 active:scale-[0.97] h-10 px-5 text-sm gap-2 brand-gradient text-white shadow-[var(--shadow-brand)] hover:brightness-[1.07] hover:shadow-[0_14px_34px_rgba(36,102,70,0.45)]"
+                >
+                  <Download className="h-4 w-4" /> Download file
+                </a>
               </div>
             )}
 
@@ -404,12 +498,9 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
             {!previewFile.contentType?.startsWith("image/") &&
               previewFile.contentType !== "application/pdf" &&
               !previewFile.contentType?.startsWith("text/") &&
-              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" &&
-              previewFile.contentType !== "application/vnd.ms-excel" &&
-              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document" &&
-              previewFile.contentType !== "application/msword" &&
-              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.presentationml.presentation" &&
-              previewFile.contentType !== "application/vnd.ms-powerpoint" && (
+              !EXCEL_TYPES.includes(previewFile.contentType) &&
+              !WORD_TYPES.includes(previewFile.contentType) &&
+              !PPTX_TYPES.includes(previewFile.contentType) && (
                 <div className="flex flex-col items-center justify-center py-14 text-center rounded-2xl border border-dashed border-line bg-surface-2/40">
                   <File className="h-12 w-12 text-faint mb-3" />
                   <p className="text-sm font-semibold text-ink">Preview not available</p>

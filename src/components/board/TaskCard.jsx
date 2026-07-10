@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Calendar } from "lucide-react";
+import { Calendar, Paperclip } from "lucide-react";
 import Avatar from "../ui/Avatar";
 import { PriorityTag } from "../ui/Badge";
 import { cn, formatDueDate } from "../../lib/utils";
@@ -49,16 +49,28 @@ const TaskCard = ({ task, onClick, overlay = false }) => {
           <span className="text-[11px] text-faint">Unassigned</span>
         )}
 
-        {due && (
-          <span
-            className={cn(
-              "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium tabular",
-              due.overdue ? "bg-priority-urgent/10 text-priority-urgent" : "bg-surface-2 text-muted"
-            )}
-          >
-            <Calendar className="h-3 w-3" /> {due.label}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {task.attachments?.length > 0 && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted"
+              title={`${task.attachments.length} attachment(s)`}
+            >
+              <Paperclip className="h-3 w-3 text-faint" />
+              <span>{task.attachments.length}</span>
+            </span>
+          )}
+
+          {due && (
+            <span
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium tabular",
+                due.overdue ? "bg-priority-urgent/10 text-priority-urgent" : "bg-surface-2 text-muted"
+              )}
+            >
+              <Calendar className="h-3 w-3" /> {due.label}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

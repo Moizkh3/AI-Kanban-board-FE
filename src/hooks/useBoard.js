@@ -202,10 +202,41 @@ export const useBoard = (boardId) => {
     [boardId]
   );
 
+  const uploadAttachment = useCallback(
+    async (taskId, file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const task = await taskApi.uploadAttachment(boardId, taskId, formData);
+        upsertTask(task);
+        return task;
+      } catch (err) {
+        toast.error(err.message);
+        throw err;
+      }
+    },
+    [boardId, upsertTask]
+  );
+
+  const deleteAttachment = useCallback(
+    async (taskId, attachmentId) => {
+      try {
+        const task = await taskApi.deleteAttachment(boardId, taskId, attachmentId);
+        upsertTask(task);
+        return task;
+      } catch (err) {
+        toast.error(err.message);
+        throw err;
+      }
+    },
+    [boardId, upsertTask]
+  );
+
   return {
     board, columns, tasks, members, role, loading, error, presence,
     setBoard, setMembers,
     createTask, updateTask, deleteTask, moveTask, upsertTask,
     addColumn, renameColumn, deleteColumn,
+    uploadAttachment, deleteAttachment,
   };
 };

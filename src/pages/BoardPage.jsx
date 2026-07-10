@@ -26,6 +26,10 @@ const BoardPage = () => {
   const b = useBoard(boardId);
 
   const [taskModal, setTaskModal] = useState({ open: false, task: null, columnId: null });
+  const activeTask = useMemo(() => {
+    if (!taskModal.task) return null;
+    return b.tasks.find((t) => t.id === taskModal.task.id) || taskModal.task;
+  }, [taskModal.task, b.tasks]);
   const [aiGen, setAiGen] = useState({ open: false, columnId: null });
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -179,7 +183,7 @@ const BoardPage = () => {
       <TaskModal
         open={taskModal.open}
         onClose={() => setTaskModal({ open: false, task: null, columnId: null })}
-        task={taskModal.task}
+        task={activeTask}
         defaultColumnId={taskModal.columnId}
         columns={b.columns}
         members={b.members}

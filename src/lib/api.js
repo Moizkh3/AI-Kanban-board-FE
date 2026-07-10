@@ -82,6 +82,18 @@ export const taskApi = {
     api.patch(`/boards/${boardId}/tasks/${taskId}/move`, data).then((r) => r.data.task),
   remove: (boardId, taskId) =>
     api.delete(`/boards/${boardId}/tasks/${taskId}`).then((r) => r.data),
+  uploadAttachment: (boardId, taskId, formData) =>
+    api.post(`/boards/${boardId}/tasks/${taskId}/attachments`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data.task),
+  deleteAttachment: (boardId, taskId, attachmentId) =>
+    api.delete(`/boards/${boardId}/tasks/${taskId}/attachments/${attachmentId}`).then((r) => r.data.task),
+  getAttachmentDownloadUrl: (boardId, taskId, attachmentId) => {
+    const baseURL = api.defaults.baseURL;
+    const token = getToken();
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    return `${baseURL}/boards/${boardId}/tasks/${taskId}/attachments/${attachmentId}${query}`;
+  },
 };
 
 export const aiApi = {

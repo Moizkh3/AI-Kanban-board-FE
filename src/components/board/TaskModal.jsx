@@ -33,28 +33,6 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
-const loadSheetJS = () => {
-  return new Promise((resolve, reject) => {
-    if (window.XLSX) { resolve(window.XLSX); return; }
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-    script.onload = () => resolve(window.XLSX);
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-};
-
-const loadMammoth = () => {
-  return new Promise((resolve, reject) => {
-    if (window.mammoth) { resolve(window.mammoth); return; }
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js";
-    script.onload = () => resolve(window.mammoth);
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-};
-
 const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, actions, onBreakdown }) => {
   const isEdit = Boolean(task);
   const [form, setForm] = useState(empty(defaultColumnId));
@@ -64,31 +42,11 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
   const [previewFile, setPreviewFile] = useState(null);
   const [textPreview, setTextPreview] = useState("");
   const [loadingText, setLoadingText] = useState(false);
-  const [sheetHtml, setSheetHtml] = useState("");
-  const [docHtml, setDocHtml] = useState("");
-  const [loadingOffice, setLoadingOffice] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, attachmentId: null, filename: "" });
   const [deletingFile, setDeletingFile] = useState(false);
 
-  const EXCEL_TYPES = [
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel",
-  ];
-  const WORD_TYPES = [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/msword",
-  ];
-  const PPTX_TYPES = [
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.ms-powerpoint",
-  ];
-
   useEffect(() => {
-    if (!previewFile) return;
-
-    const ct = previewFile.contentType;
-
-    if (ct?.startsWith("text/")) {
+    if (previewFile && previewFile.contentType?.startsWith("text/")) {
       setLoadingText(true);
       setTextPreview("");
       fetch(previewFile.url)
@@ -96,52 +54,7 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
         .then((text) => setTextPreview(text))
         .catch(() => setTextPreview("Failed to load file preview content."))
         .finally(() => setLoadingText(false));
-      return;
     }
-
-    if (EXCEL_TYPES.includes(ct)) {
-      setSheetHtml("");
-      setLoadingOffice(true);
-      (async () => {
-        try {
-          const XLSX = await loadSheetJS();
-          const response = await fetch(previewFile.url);
-          const arrayBuffer = await response.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: "array" });
-          const firstSheet = workbook.SheetNames[0];
-          const html = XLSX.utils.sheet_to_html(workbook.Sheets[firstSheet], {
-            header: "",
-            footer: "",
-          });
-          setSheetHtml(html);
-        } catch {
-          setSheetHtml("<p style='padding:1rem;color:#888'>Failed to render spreadsheet.</p>");
-        } finally {
-          setLoadingOffice(false);
-        }
-      })();
-      return;
-    }
-
-    if (WORD_TYPES.includes(ct)) {
-      setDocHtml("");
-      setLoadingOffice(true);
-      (async () => {
-        try {
-          const mammoth = await loadMammoth();
-          const response = await fetch(previewFile.url);
-          const arrayBuffer = await response.arrayBuffer();
-          const result = await mammoth.convertToHtml({ arrayBuffer });
-          setDocHtml(result.value);
-        } catch {
-          setDocHtml("<p style='padding:1rem;color:#888'>Failed to render document.</p>");
-        } finally {
-          setLoadingOffice(false);
-        }
-      })();
-      return;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewFile]);
 
   const handleFileUpload = async (e) => {
@@ -244,161 +157,161 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
   return (
     <>
       <Modal open={open} onClose={onClose} title={isEdit ? "Edit task" : "New task"} size="md">
-      <form onSubmit={onSubmit} className="space-y-4">
-        <Input label="Title" placeholder="What needs to be done?" autoFocus value={form.title} onChange={set("title")} />
-        <Textarea label="Description" rows={4} placeholder="Add more detail…" value={form.description} onChange={set("description")} />
+        <form onSubmit={onSubmit} className="space-y-4">
+          <Input label="Title" placeholder="What needs to be done?" autoFocus value={form.title} onChange={set("title")} />
+          <Textarea label="Description" rows={4} placeholder="Add more detail…" value={form.description} onChange={set("description")} />
 
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Priority" value={form.priority} onChange={set("priority")}>
-            {PRIORITIES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </Select>
-          <Input label="Due date" type="date" value={form.due_date} onChange={set("due_date")} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Assignee" value={form.assignee_id} onChange={set("assignee_id")}>
-            <option value="">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </Select>
-          {!isEdit && (
-            <Select label="Column" value={form.column_id} onChange={set("column_id")}>
-              {columns.map((c) => (
-                <option key={c.id} value={c.id}>{c.title}</option>
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Priority" value={form.priority} onChange={set("priority")}>
+              {PRIORITIES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </Select>
-          )}
-        </div>
+            <Input label="Due date" type="date" value={form.due_date} onChange={set("due_date")} />
+          </div>
 
-        {isEdit && (
-          <div className="border-t border-line/60 pt-4 mt-2">
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                <Paperclip className="h-3.5 w-3.5" />
-                Attachments {task.attachments?.length > 0 && `(${task.attachments.length})`}
-              </label>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                />
-                <span className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-600 transition-colors">
-                  {uploading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <UploadCloud className="h-3.5 w-3.5" />
-                  )}
-                  Upload file
-                </span>
-              </label>
-            </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Assignee" value={form.assignee_id} onChange={set("assignee_id")}>
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </Select>
+            {!isEdit && (
+              <Select label="Column" value={form.column_id} onChange={set("column_id")}>
+                {columns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </Select>
+            )}
+          </div>
 
-            {task.attachments?.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {task.attachments.map((att) => {
-                  const downloadUrl = taskApi.getAttachmentDownloadUrl(
-                    task.board_id,
-                    task.id,
-                    att.attachment_id
-                  );
-                  const isImage = att.contentType?.startsWith("image/");
-                  return (
-                    <div
-                      key={att.id}
-                      className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-2.5 transition-all hover:bg-surface-3"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {isImage ? (
-                          <div className="h-9 w-9 overflow-hidden rounded-lg bg-surface border border-line flex items-center justify-center shrink-0">
-                            <img
-                              src={downloadUrl}
-                              alt={att.filename}
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = "none";
-                              }}
-                            />
+          {isEdit && (
+            <div className="border-t border-line/60 pt-4 mt-2">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Attachments {task.attachments?.length > 0 && `(${task.attachments.length})`}
+                </label>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                  />
+                  <span className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-600 transition-colors">
+                    {uploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-3.5 w-3.5" />
+                    )}
+                    Upload file
+                  </span>
+                </label>
+              </div>
+
+              {task.attachments?.length > 0 ? (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {task.attachments.map((att) => {
+                    const downloadUrl = taskApi.getAttachmentDownloadUrl(
+                      task.board_id,
+                      task.id,
+                      att.attachment_id
+                    );
+                    const isImage = att.contentType?.startsWith("image/");
+                    return (
+                      <div
+                        key={att.id}
+                        className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-2.5 transition-all hover:bg-surface-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {isImage ? (
+                            <div className="h-9 w-9 overflow-hidden rounded-lg bg-surface border border-line flex items-center justify-center shrink-0">
+                              <img
+                                src={downloadUrl}
+                                alt={att.filename}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = "none";
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="h-9 w-9 rounded-lg bg-surface border border-line flex items-center justify-center shrink-0 text-muted">
+                              <File className="h-4 w-4" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-ink leading-normal" title={att.filename}>
+                              {att.filename}
+                            </p>
+                            <p className="text-[11px] text-faint leading-normal mt-0.5">
+                              {formatBytes(att.size)} • {att.uploader_name || "Unknown"}
+                            </p>
                           </div>
-                        ) : (
-                          <div className="h-9 w-9 rounded-lg bg-surface border border-line flex items-center justify-center shrink-0 text-muted">
-                            <File className="h-4 w-4" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-ink leading-normal" title={att.filename}>
-                            {att.filename}
-                          </p>
-                          <p className="text-[11px] text-faint leading-normal mt-0.5">
-                            {formatBytes(att.size)} • {att.uploader_name || "Unknown"}
-                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFile({ url: downloadUrl, filename: att.filename, contentType: att.contentType })}
+                            className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-ink transition-colors"
+                            title="Preview document"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <a
+                            href={downloadUrl}
+                            download={att.filename}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-ink transition-colors"
+                            title="Download/View file"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleFileDeleteClick(att.attachment_id, att.filename)}
+                            className="rounded-lg p-1.5 text-priority-urgent hover:bg-surface transition-colors"
+                            title="Delete file"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewFile({ url: downloadUrl, filename: att.filename, contentType: att.contentType })}
-                          className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-ink transition-colors"
-                          title="Preview document"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <a
-                          href={downloadUrl}
-                          download={att.filename}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-ink transition-colors"
-                          title="Download/View file"
-                        >
-                          <Download className="h-4 w-4" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleFileDeleteClick(att.attachment_id, att.filename)}
-                          className="rounded-lg p-1.5 text-priority-urgent hover:bg-surface transition-colors"
-                          title="Delete file"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 rounded-xl border border-dashed border-line bg-surface/50 text-center">
-                <Paperclip className="h-6 w-6 text-faint mb-1.5" />
-                <p className="text-xs text-muted">No documents uploaded yet</p>
-              </div>
-            )}
-          </div>
-        )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 rounded-xl border border-dashed border-line bg-surface/50 text-center">
+                  <Paperclip className="h-6 w-6 text-faint mb-1.5" />
+                  <p className="text-xs text-muted">No documents uploaded yet</p>
+                </div>
+              )}
+            </div>
+          )}
 
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <div>
-            {isEdit && (
-              <Button type="button" variant="ghost" onClick={handleDelete} className="text-priority-urgent">
-                <Trash2 className="h-4 w-4" /> Delete
-              </Button>
-            )}
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <div>
+              {isEdit && (
+                <Button type="button" variant="ghost" onClick={handleDelete} className="text-priority-urgent">
+                  <Trash2 className="h-4 w-4" /> Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {isEdit && (
+                <Button type="button" variant="outline" onClick={handleBreakdown} disabled={breakingDown}>
+                  {breakingDown ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+                  AI breakdown
+                </Button>
+              )}
+              <Button type="submit" loading={saving}>{isEdit ? "Save" : "Create task"}</Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            {isEdit && (
-              <Button type="button" variant="outline" onClick={handleBreakdown} disabled={breakingDown}>
-                {breakingDown ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-                AI breakdown
-              </Button>
-            )}
-            <Button type="submit" loading={saving}>{isEdit ? "Save" : "Create task"}</Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
+        </form>
+      </Modal>
 
       {previewFile && (
         <Modal
@@ -428,58 +341,37 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
               </div>
             )}
 
-            {/* Excel — rendered in browser via SheetJS */}
-            {EXCEL_TYPES.includes(previewFile.contentType) && (
-              <div className="border border-line rounded-2xl overflow-hidden">
-                {loadingOffice ? (
-                  <div className="flex items-center justify-center py-20 bg-surface-2">
-                    <Loader2 className="h-6 w-6 animate-spin text-brand" />
-                    <span className="ml-2 text-sm text-muted">Loading spreadsheet…</span>
-                  </div>
-                ) : (
-                  <div
-                    className="overflow-auto max-h-[500px] bg-white p-1 text-xs"
-                    style={{ "--tw-prose-td-borders": "#e2e8f0" }}
-                    dangerouslySetInnerHTML={{ __html: sheetHtml }}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Word — rendered in browser via Mammoth.js */}
-            {WORD_TYPES.includes(previewFile.contentType) && (
-              <div className="border border-line rounded-2xl overflow-hidden">
-                {loadingOffice ? (
-                  <div className="flex items-center justify-center py-20 bg-surface-2">
-                    <Loader2 className="h-6 w-6 animate-spin text-brand" />
-                    <span className="ml-2 text-sm text-muted">Loading document…</span>
-                  </div>
-                ) : (
-                  <div
-                    className="prose prose-sm max-w-none overflow-auto max-h-[500px] bg-white p-5 text-slate-800"
-                    dangerouslySetInnerHTML={{ __html: docHtml }}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* PowerPoint — no good client-side renderer, just download */}
-            {PPTX_TYPES.includes(previewFile.contentType) && (
-              <div className="flex flex-col items-center justify-center py-14 text-center rounded-2xl border border-dashed border-line bg-surface-2/40">
-                <File className="h-12 w-12 text-faint mb-3" />
-                <p className="text-sm font-semibold text-ink">PowerPoint Preview</p>
-                <p className="text-xs text-muted mt-1 max-w-sm">
-                  Browser-based PowerPoint preview isn't available. Download the file to open it in PowerPoint or Google Slides.
-                </p>
-                <a
-                  href={previewFile.url}
-                  download={previewFile.filename}
-                  className="mt-5 inline-flex select-none items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 ease-[var(--ease-spring)] focus-ring disabled:opacity-50 active:scale-[0.97] h-10 px-5 text-sm gap-2 brand-gradient text-white shadow-[var(--shadow-brand)] hover:brightness-[1.07] hover:shadow-[0_14px_34px_rgba(36,102,70,0.45)]"
-                >
-                  <Download className="h-4 w-4" /> Download file
-                </a>
-              </div>
-            )}
+            {(previewFile.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+              previewFile.contentType === "application/vnd.ms-excel" ||
+              previewFile.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+              previewFile.contentType === "application/msword" ||
+              previewFile.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+              previewFile.contentType === "application/vnd.ms-powerpoint") && (
+                <div className="bg-surface-2 rounded-2xl overflow-hidden h-[550px] border border-line">
+                  {!previewFile.url.includes("localhost") && !previewFile.url.includes("127.0.0.1") ? (
+                    <iframe
+                      src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewFile.url)}`}
+                      className="w-full h-full border-none"
+                      title={previewFile.filename}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                      <File className="h-10 w-10 text-faint mb-2.5" />
+                      <p className="text-sm font-semibold text-ink">Office Document Preview</p>
+                      <p className="text-xs text-muted mt-1 max-w-sm">
+                        Microsoft Office Viewer cannot fetch files from <strong>localhost</strong>. Once deployed to Vercel, this Excel/Word file will preview perfectly!
+                      </p>
+                      <a
+                        href={previewFile.url}
+                        download={previewFile.filename}
+                        className="mt-4 inline-flex select-none items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 ease-[var(--ease-spring)] focus-ring disabled:opacity-50 active:scale-[0.97] h-10 px-5 text-sm gap-2 brand-gradient text-white shadow-[var(--shadow-brand)] hover:brightness-[1.07] hover:shadow-[0_14px_34px_rgba(36,102,70,0.45)]"
+                      >
+                        <Download className="h-4 w-4" /> Download file
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
 
             {previewFile.contentType?.startsWith("text/") && (
               <div className="border border-line rounded-2xl overflow-hidden">
@@ -498,9 +390,12 @@ const TaskModal = ({ open, onClose, task, defaultColumnId, columns, members, act
             {!previewFile.contentType?.startsWith("image/") &&
               previewFile.contentType !== "application/pdf" &&
               !previewFile.contentType?.startsWith("text/") &&
-              !EXCEL_TYPES.includes(previewFile.contentType) &&
-              !WORD_TYPES.includes(previewFile.contentType) &&
-              !PPTX_TYPES.includes(previewFile.contentType) && (
+              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" &&
+              previewFile.contentType !== "application/vnd.ms-excel" &&
+              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document" &&
+              previewFile.contentType !== "application/msword" &&
+              previewFile.contentType !== "application/vnd.openxmlformats-officedocument.presentationml.presentation" &&
+              previewFile.contentType !== "application/vnd.ms-powerpoint" && (
                 <div className="flex flex-col items-center justify-center py-14 text-center rounded-2xl border border-dashed border-line bg-surface-2/40">
                   <File className="h-12 w-12 text-faint mb-3" />
                   <p className="text-sm font-semibold text-ink">Preview not available</p>
